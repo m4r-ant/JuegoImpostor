@@ -3,6 +3,9 @@
 import { useState } from "react"
 import { calculateImpostorCount } from "@/lib/game-logic"
 import type { Room } from "@/lib/types"
+import { useEffect } from "react"
+import { useWebsocket } from "@/hooks/use-websocket"
+import { useRouter } from "next/navigation"
 
 interface Props {
   room: Room
@@ -10,15 +13,65 @@ interface Props {
 
 export function Lobby({ room }: Props) {
   const [starting, setStarting] = useState(false)
-  const impostorCount = calculateImpostorCount(room.players.length)
-  const canStart = room.players.length >= 3
+  const router = useRouter()
+
+  // Local players state so we can update in realtime
+  const [players, setPlayers] = useState(room.players)
+
+  // read playerId from localStorage
+  const playerId = typeof window !== 'undefined' ? localStorage.getItem('playerId') || undefined : undefined
+  const { on, off } = useWebsocket(room.id, playerId || undefined)
+
+  // Calculate derived values from players array
+  const playerCount = players.length
+  const impostorCount = calculateImpostorCount(playerCount)
+  const canStart = playerCount >= 3
+  const isHost = room.hostId === playerId
+
+  useEffect(() => {
+    // handler for new players
+    const handlePlayerJoined = (data: any) => {
+      console.log("[Lobby] player-joined event:", data)
+      if (!data || !data.player) {
+        console.warn("[Lobby] Invalid player-joined data:", data)
+        return
+      }
+      const incoming = data.player
+      setPlayers((prev) => {
+        if (prev.some((p) => p.id === incoming.id)) return prev
+        return [...prev, incoming]
+      })
+    }
+
+    const handleGameStarted = (data: any) => {
+      console.log("[Lobby] game-started event")
+      // refresh server state so page shows revealing state
+      router.refresh()
+    }
+
+    on("player-joined", handlePlayerJoined)
+    on("player-left", (d: any) => {
+      const pid = d?.playerId
+      if (pid) {
+        setPlayers((prev) => prev.filter((p) => p.id !== pid))
+      }
+    })
+    on("game-started", handleGameStarted)
+
+    return () => {
+      off("player-joined")
+      off("player-left")
+      off("game-started")
+    }
+  }, [on, off, router])
 
   const handleStart = async () => {
     if (!canStart) return
 
     setStarting(true)
     try {
-      const response = await fetch(`/api/rooms/${room.id}/start`, {
+      // Use room.code to call the start endpoint (which uses [code] dynamic route)
+      const response = await fetch(`/api/rooms/${room.code}/start`, {
         method: "POST",
       })
 
@@ -47,7 +100,7 @@ export function Lobby({ room }: Props) {
           <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
             <p className="text-gray-400 text-sm">Jugadores</p>
             <p className="text-3xl font-bold text-lime-400">
-              {room.currentPlayers}/{room.maxPlayers}
+              {playerCount}/{room.maxPlayers}
             </p>
           </div>
 
@@ -61,12 +114,17 @@ export function Lobby({ room }: Props) {
         <div className="space-y-3 mb-8">
           <h2 className="text-lg font-bold text-gray-300">Jugadores</h2>
           <div className="space-y-2 max-h-96 overflow-y-auto">
-            {room.players.map((player) => (
+            {players.map((player) => (
               <div
                 key={player.id}
                 className="flex items-center justify-between px-4 py-3 bg-gray-800 rounded-lg border border-gray-700"
               >
-                <span className="text-white font-mono">{player.username}</span>
+                <div className="flex items-center gap-2">
+                  {player.id === room.hostId && (
+                    <span className="text-lg">👑</span>
+                  )}
+                  <span className="text-white font-mono">{player.username}</span>
+                </div>
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 bg-lime-400 rounded-full"></span>
                   <span className="text-gray-400 text-sm">Conectado</span>
@@ -83,14 +141,20 @@ export function Lobby({ room }: Props) {
           </div>
         )}
 
-        {/* Start Button */}
-        <button
-          onClick={handleStart}
-          disabled={!canStart || starting}
-          className="w-full px-6 py-4 bg-lime-400 text-black font-bold rounded-lg hover:bg-lime-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {starting ? "Iniciando..." : "Comenzar Partida"}
-        </button>
+        {/* Start Button - Only for host */}
+        {isHost ? (
+          <button
+            onClick={handleStart}
+            disabled={!canStart || starting}
+            className="w-full px-6 py-4 bg-lime-400 text-black font-bold rounded-lg hover:bg-lime-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {starting ? "Iniciando..." : "Comenzar Partida"}
+          </button>
+        ) : (
+          <div className="w-full px-6 py-4 bg-gray-700 text-gray-400 font-bold rounded-lg text-center">
+            Esperando que el anfitrión inicie...
+          </div>
+        )}
       </div>
     </main>
   )

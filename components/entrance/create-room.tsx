@@ -40,7 +40,11 @@ export function CreateRoom({ onBack }: Props) {
 
       if (!response.ok) throw new Error("Error al crear la sala")
 
-      const { roomId } = await response.json()
+      const { roomId, playerId } = await response.json()
+      // store player id locally for identifying socket
+      try {
+        localStorage.setItem('playerId', playerId)
+      } catch (_) {}
       router.push(`/game/${roomId}`)
     } catch (err) {
       setError("Hubo un error al crear la partida")

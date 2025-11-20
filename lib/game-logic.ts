@@ -25,35 +25,60 @@ export function getRandomSector(): number {
 
 export function determineWinner(
   impostorIds: string[],
-  votedOutId: string | undefined,
+  alivePlayers: Player[],
+  votedOutId?: string,
 ): { winner: "innocents" | "impostors" | "tie"; message: string } {
-  if (!votedOutId) {
+  // Count alive impostors and innocents
+  const aliveImpostors = alivePlayers.filter((p) => impostorIds.includes(p.id))
+  const aliveInnocents = alivePlayers.filter((p) => !impostorIds.includes(p.id))
+
+  // If impostors == innocents, impostors win
+  if (aliveImpostors.length >= aliveInnocents.length && aliveInnocents.length > 0) {
     return {
       winner: "impostors",
-      message: "No se votó a nadie. Los impostores escapan.",
+      message: `Los impostores ganan. ${aliveImpostors.length} impostores vs ${aliveInnocents.length} inocentes.`,
     }
   }
 
-  if (impostorIds.includes(votedOutId)) {
-    const remaining = impostorIds.filter((id) => id !== votedOutId).length
-    if (remaining === 0) {
-      return {
-        winner: "innocents",
-        message: "¡Los inocentes ganaron! Eliminaron a todos los impostores.",
-      }
-    }
+  // If all impostors are eliminated, innocents win
+  if (aliveImpostors.length === 0) {
     return {
       winner: "innocents",
-      message: `¡Los inocentes ganaron! Un impostor eliminado (${remaining} restante).`,
+      message: "¡Los inocentes ganaron! Eliminaron a todos los impostores.",
     }
   }
 
+  // If there are no innocents, impostors win
+  if (aliveInnocents.length === 0) {
+    return {
+      winner: "impostors",
+      message: "Los impostores ganan. Eliminaron a todos los inocentes.",
+    }
+  }
+
+  // Game continues
   return {
-    winner: "impostors",
-    message: "Los inocentes votaron mal. Los impostores ganan.",
+    winner: "tie",
+    message: "El juego continúa.",
   }
 }
 
 export function generateRoomCode(): string {
   return Math.random().toString(36).substring(2, 8).toUpperCase()
+}
+
+export function generateSpeakingOrder(players: Player[], impostorIds: string[]): string[] {
+  // Separate innocents and impostors
+  const innocents = players
+    .filter((p) => !impostorIds.includes(p.id))
+    .map((p) => p.id)
+  const impostors = players
+    .filter((p) => impostorIds.includes(p.id))
+    .map((p) => p.id)
+
+  // Shuffle innocents
+  const shuffledInnocents = [...innocents].sort(() => Math.random() - 0.5)
+  
+  // Impostors go last
+  return [...shuffledInnocents, ...impostors]
 }

@@ -1,6 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { useWebsocket } from "@/hooks/use-websocket"
 import type { Room } from "@/lib/types"
 
 interface Props {
@@ -10,16 +12,69 @@ interface Props {
 export function VotingPanel({ room }: Props) {
   const [votes, setVotes] = useState<Record<string, number>>({})
   const [voted, setVoted] = useState(false)
+  const [playerId, setPlayerId] = useState<string | null>(null)
+  const [votedForId, setVotedForId] = useState<string | null>(null)
+  const router = useRouter()
+  const { on, off } = useWebsocket(room.id, playerId || undefined)
 
-  const handleVote = (playerId: string) => {
-    setVotes({
-      ...votes,
-      [playerId]: (votes[playerId] || 0) + 1,
-    })
-    setVoted(true)
+  useEffect(() => {
+    const id = typeof window !== "undefined" ? localStorage.getItem("playerId") : null
+    setPlayerId(id)
+  }, [])
+
+  useEffect(() => {
+    const handleVotingComplete = (data: any) => {
+      console.log("[VotingPanel] voting-complete event:", data)
+      // Wait 2 seconds before redirecting
+      setTimeout(() => {
+        router.refresh()
+      }, 2000)
+    }
+
+    const handlePhaseChanged = (data: any) => {
+      console.log("[VotingPanel] phase-changed event:", data)
+      if (data?.phase === "sector" || data?.phase === "finished") {
+        router.refresh()
+      }
+    }
+
+    on("voting-complete", handleVotingComplete)
+    on("phase-changed", handlePhaseChanged)
+
+    return () => {
+      off("voting-complete")
+      off("phase-changed")
+    }
+  }, [on, off, router])
+
+  const handleVote = async (targetId: string) => {
+    if (!voted && playerId) {
+      setVoted(true)
+      setVotedForId(targetId)
+      setVotes({
+        ...votes,
+        [targetId]: (votes[targetId] || 0) + 1,
+      })
+
+      try {
+        const response = await fetch(`/api/rooms/${room.code}/vote`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ playerId, votedForId: targetId }),
+        })
+
+        const data = await response.json()
+        console.log("[VotingPanel] Vote response:", data)
+      } catch (error) {
+        console.error("[VotingPanel] Error voting:", error)
+      }
+    }
   }
 
   const maxVotes = Math.max(...Object.values(votes), 0)
+
+  // Filter out current player
+  const otherPlayers = room.players.filter((p) => p.id !== playerId)
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black p-4">
@@ -44,7 +99,7 @@ export function VotingPanel({ room }: Props) {
         <div className="space-y-3">
           <h2 className="text-lg font-bold text-gray-300">Candidatos</h2>
           <div className="grid gap-2">
-            {room.players.map((player) => {
+            {otherPlayers.map((player) => {
               const playerVotes = votes[player.id] || 0
               const votePercentage = maxVotes > 0 ? (playerVotes / maxVotes) * 100 : 0
 

@@ -52,7 +52,10 @@ export function JoinRoom({ onBack }: Props) {
       }
       if (!response.ok) throw new Error("Error al unirse a la sala")
 
-      const { roomId } = await response.json()
+      const { roomId, playerId } = await response.json()
+      try {
+        localStorage.setItem('playerId', playerId)
+      } catch (_) {}
       router.push(`/game/${roomId}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido")

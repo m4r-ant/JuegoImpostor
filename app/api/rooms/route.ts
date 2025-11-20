@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { generateRoomCode } from "@/lib/game-logic"
 import { listRooms, saveRoom } from "@/lib/rooms-store"
 import type { Room } from "@/lib/types"
+import { emitToSocket } from "@/lib/server-socket-client"
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,14 +15,16 @@ export async function POST(request: NextRequest) {
     const roomId = crypto.randomUUID()
     const code = generateRoomCode()
 
+    const playerId = crypto.randomUUID()
+
     const room: Room = {
       id: roomId,
       code,
-      hostId: crypto.randomUUID(),
+      hostId: playerId,
       status: "waiting",
       players: [
         {
-          id: crypto.randomUUID(),
+          id: playerId,
           username,
           isAlive: true,
           points: 0,
@@ -35,7 +38,14 @@ export async function POST(request: NextRequest) {
 
     saveRoom(room)
 
-    return NextResponse.json({ roomId, code })
+    // emit player-joined to socket server for realtime updates
+    try {
+      emitToSocket("player-joined", { roomId: room.id, player: { id: playerId, username } })
+    } catch (err) {
+      console.error("Failed to emit player-joined", err)
+    }
+
+    return NextResponse.json({ roomId, code, playerId })
   } catch (error) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }

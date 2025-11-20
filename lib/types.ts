@@ -1,6 +1,6 @@
 // Types and interfaces for the game
 export type PlayerRole = "impostor" | "innocent"
-export type GameStatus = "waiting" | "playing" | "revealing" | "round" | "voting" | "finished"
+export type GameStatus = "waiting" | "sector" | "revealing" | "round" | "voting" | "voting-result" | "finished"
 export type GameResult = "impostors_caught" | "impostors_escaped" | "tie"
 
 export interface Player {
@@ -22,6 +22,7 @@ export interface Room {
   maxPlayers: number
   createdAt: Date
   updatedAt: Date
+  currentGame?: Game
 }
 
 export interface Artwork {
@@ -41,10 +42,15 @@ export interface Game {
   impostorIds: string[]
   status: GameStatus
   round: number
-  descriptions: Map<string, string>
-  votes: Map<string, string> // playerId -> votedForId
+  // Use plain objects for easy serialization in memory/store
+  descriptions: Record<string, string>
+  votes: Record<string, string> // playerId -> votedForId
   votedOutId?: string
   result?: GameResult
+  readyPlayers?: string[] // Players who clicked "Listo"
+  // Speaking order for this round (randomized, impostors at end)
+  speakingOrder?: string[]
+  currentSpeakerIndex?: number
   createdAt: Date
 }
 
