@@ -1,8 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { generateRoomCode } from "@/lib/game-logic"
-
-// Almacenamiento temporal (en producción usar BD)
-const rooms = new Map()
+import { listRooms, saveRoom } from "@/lib/rooms-store"
+import type { Room } from "@/lib/types"
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,7 +14,7 @@ export async function POST(request: NextRequest) {
     const roomId = crypto.randomUUID()
     const code = generateRoomCode()
 
-    const room = {
+    const room: Room = {
       id: roomId,
       code,
       hostId: crypto.randomUUID(),
@@ -34,8 +33,7 @@ export async function POST(request: NextRequest) {
       updatedAt: new Date(),
     }
 
-    rooms.set(roomId, room)
-    rooms.set(code, room)
+    saveRoom(room)
 
     return NextResponse.json({ roomId, code })
   } catch (error) {
@@ -45,7 +43,7 @@ export async function POST(request: NextRequest) {
 
 export async function GET() {
   // Get active rooms (for testing)
-  const activeRooms = Array.from(rooms.values()).filter((room: any) => room.status === "waiting")
+  const activeRooms = listRooms().filter((room) => room.status === "waiting")
 
   return NextResponse.json({ rooms: activeRooms })
 }

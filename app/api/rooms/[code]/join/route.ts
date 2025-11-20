@@ -1,13 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server"
-
-const rooms = new Map()
+import { getRoom, saveRoom } from "@/lib/rooms-store"
 
 export async function POST(request: NextRequest, { params }: { params: { code: string } }) {
   try {
     const code = (await params).code.toUpperCase()
     const { username } = await request.json()
 
-    const room = rooms.get(code)
+    if (!username || username.length > 20) {
+      return NextResponse.json({ error: "Invalid username" }, { status: 400 })
+    }
+
+    const room = getRoom(code)
 
     if (!room) {
       return NextResponse.json({ error: "Room not found" }, { status: 404 })
@@ -32,6 +35,8 @@ export async function POST(request: NextRequest, { params }: { params: { code: s
 
     room.currentPlayers += 1
     room.updatedAt = new Date()
+
+    saveRoom(room)
 
     return NextResponse.json({ roomId: room.id })
   } catch (error) {
