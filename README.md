@@ -1,18 +1,31 @@
 # 🎨 MAC Impostor Game - Juego Multijugador en Tiempo Real
 
-Un juego tipo "Impostor" basado en el Museo de Arte Contemporáneo (MAC), donde los jugadores deben identificar quién es el impostor basándose en características de obras de arte real del museo.
+Un juego tipo "Impostor" inspirado en el Museo de Arte Contemporáneo (MAC). Cada partida enfrenta a inocentes contra impostores: solo quienes no son impostores acceden a la obra real y deben describirla para desenmascarar a los impostores en rondas y votaciones.
 
-## 🎮 Cómo Funciona el Juego
+## 🧭 Tabla de Contenidos
+
+1. [Resumen del Juego](#-resumen-del-juego)
+2. [Reglas de Impostores](#-regla-de-impostores)
+3. [Stack Tecnológico](#-stack-tecnológico)
+4. [Estructura del Proyecto](#-estructura-del-proyecto)
+5. [Base de Datos](#-estructura-de-base-de-datos)
+6. [Tiempo Real](#-configuración-multijugador)
+7. [Cómo Correr el Proyecto](#-cómo-correr-el-proyecto)
+8. [Flujo Detallado de Partida](#-flujo-detallado-de-partida)
+9. [Reglas de Negocio y Eventos](#-reglas-de-negocio-clave)
+10. [Despliegue y Troubleshooting](#-despliegue)
+
+## 🎮 Resumen del Juego
 
 ### Flujo General
-1. **Página de Entrada**: Crea una nueva sala o únete a una existente
-2. **Selección de Jugadores**: Espera a que se unan al menos 3 jugadores (máximo infinito)
-3. **Asignación de Roles**: Se asignan impostores automáticamente (1 por cada 3 jugadores)
-4. **Selección de Sector**: Se elige aleatoriamente un sector del MAC (1, 2, 3)
-5. **Revelación de Obra**: Los inocentes ven la obra por 5 segundos, impostores no
-6. **Rondas de Descripción**: Cada jugador describe una característica de la obra
-7. **Votación**: Los jugadores votan para eliminar a quien creen que es el impostor
-8. **Resultado**: Se revela quién era el impostor y se contabilizan puntos
+1. **Página de Entrada**: Crea una sala nueva o únete con un código existente.
+2. **Lobby**: Espera a reunir al menos 3 jugadores (sin límite máximo). El host controla el inicio.
+3. **Asignación de Roles**: El backend calcula cuántos impostores corresponden y asigna roles.
+4. **Selección de Sector y Obra**: Se toma un sector aleatorio del MAC y se elige una obra representativa.
+5. **Revelación (solo inocentes)**: Ven la obra durante 5 segundos. Impostores solo saben el sector.
+6. **Rondas de Descripción**: Los jugadores comparten pistas. El impostor improvisa.
+7. **Votación**: Cada jugador vota a quien cree impostor; empate = nadie sale.
+8. **Resultado**: Se revela el impostor, se otorgan puntos y se prepara la siguiente ronda o finaliza la partida.
 
 ### Regla de Impostores
 - **3 jugadores** = 1 impostor
@@ -298,62 +311,69 @@ channel.on('message', (data) => {});
 ## 📝 Instalación y Desarrollo
 
 ### Prerequisites
-- Node.js 18+
-- PostgreSQL (Neon recomendado)
-- npm o yarn
+- Node.js 18 o superior y npm/pnpm.
+- (Opcional) PostgreSQL si quieres persistencia real; por defecto el backend usa `rooms-store` en memoria.
+- Dos terminales disponibles para correr el servidor WebSocket y Next.js.
 
-### Pasos
-
-1. **Clonar el repositorio**
-\`\`\`bash
+### 1. Clonar e instalar dependencias
+```bash
 git clone <repo>
 cd mac-impostor-game
-\`\`\`
 
-2. **Instalar dependencias**
-\`\`\`bash
-npm install
-# o
-yarn install
-\`\`\`
+# React 19 + vaul requieren legacy peer deps por ahora
+npm install --legacy-peer-deps
+# o pnpm install --legacy-peer-deps
+```
 
-3. **Configurar variables de entorno**
-\`\`\`bash
+### 2. Configurar variables de entorno
+```bash
 cp .env.example .env.local
-\`\`\`
-
-Necesitas:
-\`\`\`
-# Base de Datos
+```
+Variables mínimas:
+```bash
+# Base de datos (puede omitirse si usas almacenamiento en memoria)
 DATABASE_URL=postgresql://user:password@localhost:5432/mac_impostor
 
-# Socket.io (si usas Socket.io)
-NEXT_PUBLIC_SOCKET_URL=http://localhost:3000
+# Socket.io local
+NEXT_PUBLIC_SOCKET_URL=http://localhost:4000
 
-# Sesión (opcional, para autenticación)
+# Sesión (solo si integras auth)
 NEXTAUTH_SECRET=your-secret-key
 NEXTAUTH_URL=http://localhost:3000
-\`\`\`
+```
 
-4. **Inicializar base de datos**
-\`\`\`bash
-# Correr script SQL en tu BD
+### 3. (Opcional) Inicializar base de datos
+```bash
 psql -U user -d mac_impostor -f scripts/init-db.sql
 psql -U user -d mac_impostor -f scripts/seed-artworks.sql
-\`\`\`
+```
 
-5. **Correr en desarrollo**
-\`\`\`bash
-npm run dev
-\`\`\`
+### 4. Levantar servicios en desarrollo
+1. **Servidor de sockets** (terminal A)
+   ```bash
+   node server-socket.js
+   ```
+   Esto abre `ws://localhost:4000` y reenvía eventos `player-joined`, `game-started`, etc.
 
-Abre [http://localhost:3000](http://localhost:3000)
+2. **Next.js + API** (terminal B)
+   ```bash
+   npm run dev
+   ```
+   La app queda en [http://localhost:3000](http://localhost:3000). Abre varias ventanas incógnitas para simular jugadores.
 
-6. **Build para producción**
-\`\`\`bash
-npm run build
-npm start
-\`\`\`
+### 5. Comandos útiles
+- `npm run lint` – Verifica el código.
+- `npm run build && npm run start` – Build y modo producción.
+- `npm run dev -- --turbo` – Opcional si usas la caché de Next.
+
+### 6. Alternativa: correr todo con Docker
+1. Copia los archivos `Dockerfile.next`, `Dockerfile.socket` y `docker-compose.yml` (incluidos en el repo).
+2. Ajusta `.env.local` para que `NEXT_PUBLIC_SOCKET_URL=http://socket:4000` (el compose ya lo sobreescribe).
+3. Ejecuta:
+   ```bash
+   docker-compose up --build
+   ```
+   Esto levanta dos contenedores: `app` (Next.js en el puerto 3000) y `socket` (Socket.io en el 4000). Puedes exponer los puertos como necesites (ej. `- "80:3000"`).
 
 ## 🎯 Características Implementadas
 

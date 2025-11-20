@@ -1,0 +1,26 @@
+version: "3.9"
+
+services:
+  socket:
+    build:
+      context: .
+      dockerfile: Dockerfile.socket
+    ports:
+      - "4000:4000"
+    restart: unless-stopped
+    env_file:
+      - .env.local
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.next
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    env_file:
+      - .env.local
+    depends_on:
+      - socket
+    environment:
+      NEXT_PUBLIC_SOCKET_URL: http://socket:4000
