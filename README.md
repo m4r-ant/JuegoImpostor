@@ -62,73 +62,25 @@ Un juego tipo "Impostor" inspirado en el Museo de Arte Contemporáneo (MAC). Cad
 
 ## 📁 Estructura del Proyecto
 
-\`\`\`
-mac-impostor-game/
-├── app/
-│   ├── layout.tsx
-│   ├── globals.css
-│   ├── page.tsx (Página de entrada)
-│   ├── api/
-│   │   ├── rooms/
-│   │   │   ├── route.ts (GET: listar, POST: crear)
-│   │   │   └── [id]/
-│   │   │       ├── route.ts (GET: obtener sala)
-│   │   │       ├── join.ts (POST: unirse)
-│   │   │       └── start.ts (POST: iniciar juego)
-│   │   ├── games/
-│   │   │   ├── route.ts (GET: historial)
-│   │   │   └── [gameId]/
-│   │   │       ├── reveal.ts (POST: revelar obra)
-│   │   │       ├── describe.ts (POST: enviar descripción)
-│   │   │       └── vote.ts (POST: votar)
-│   │   └── ws.ts (WebSocket handler)
-│   └── game/
-│       ├── [roomId]/
-│       │   ├── page.tsx (Pantalla principal del juego)
-│       │   ├── lobby.tsx (Espera de jugadores)
-│       │   ├── reveal.tsx (Revelación de obra)
-│       │   ├── round.tsx (Ronda de descripción)
-│       │   └── voting.tsx (Votación)
-├── components/
-│   ├── entrance/
-│   │   ├── create-room.tsx
-│   │   └── join-room.tsx
-│   ├── game/
-│   │   ├── player-list.tsx
-│   │   ├── artwork-reveal.tsx
-│   │   ├── description-round.tsx
-│   │   ├── voting-panel.tsx
-│   │   └── game-results.tsx
-│   └── ui/
-│       ├── button.tsx
-│       ├── card.tsx
-│       └── ... (shadcn components)
-├── hooks/
-│   ├── use-game.ts (Estado del juego)
-│   ├── use-websocket.ts (Conexión WebSocket)
-│   └── use-players.ts (Gestión de jugadores)
-├── lib/
-│   ├── game-logic.ts (Lógica de impostores, votación)
-│   ├── socket.ts (Configuración de Socket.io)
-│   ├── db.ts (Conexión a BD)
-│   └── types.ts (TypeScript types)
-├── public/
-│   └── artworks/ (Imágenes de obras del MAC)
-├── scripts/
-│   ├── init-db.sql (Script inicial BD)
-│   └── seed-artworks.sql (Poblar obras de arte)
-├── middleware.ts (Autenticación/autorización)
-├── next.config.mjs
-├── package.json
-├── tsconfig.json
-└── .env.example
-
-\`\`\`
+- `app/`
+  - `layout.tsx`, `globals.css`, `page.tsx`: layout y landing.
+  - `api/rooms/*`: creación, join y administración de salas.
+  - `api/games/*`: endpoints para revelar obra, describir y votar.
+  - `game/[roomId]/`: páginas cliente para lobby, reveal, round y voting.
+- `components/`
+  - `entrance/`: formularios de crear/unirse.
+  - `game/`: UI de la partida (lista de jugadores, reveal, voting, resultados).
+  - `ui/`: componentes base (button, card, etc.).
+- `hooks/`: estado del juego (`use-game`), jugadores y WebSocket (`use-websocket`).
+- `lib/`: lógica de roles y votos (`game-logic`), socket client/server, tipos compartidos, store en memoria.
+- `public/`: assets como `artworks/`.
+- `scripts/`: SQL para inicializar y sembrar la base de datos.
+- Configuración raíz: `middleware.ts`, `next.config.mjs`, `package.json`, `tsconfig.json`, `.env.example`.
 
 ## 🗄️ Estructura de Base de Datos
 
 ### Tabla: rooms
-\`\`\`sql
+```sql
 CREATE TABLE rooms (
   id UUID PRIMARY KEY,
   code VARCHAR(6) UNIQUE, -- Código único para unirse
@@ -374,6 +326,47 @@ psql -U user -d mac_impostor -f scripts/seed-artworks.sql
    docker-compose up --build
    ```
    Esto levanta dos contenedores: `app` (Next.js en el puerto 3000) y `socket` (Socket.io en el 4000). Puedes exponer los puertos como necesites (ej. `- "80:3000"`).
+
+### 7. Guía rápida para una VM Ubuntu/EC2
+1. **Instalar Docker + Compose** (maneja conflictos con `containerd`):
+   ```bash
+   sudo apt remove docker docker.io docker-doc docker-compose containerd containerd.io runc
+   sudo apt autoremove -y
+
+   sudo apt update
+   sudo apt install ca-certificates curl gnupg -y
+   sudo install -m 0755 -d /etc/apt/keyrings
+   curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+   sudo apt update
+   sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin -y
+   sudo usermod -aG docker $USER && exec sudo su - $USER
+   ```
+
+2. **Clonar repo y crear env** (si `.env.example` no existe, crea uno con el snippet):
+   ```bash
+   git clone <repo>
+   cd JuegoImpostor
+
+   cat <<'EOF' > .env.example
+   NEXT_PUBLIC_SOCKET_URL=http://54.175.209.93:4000
+   NEXTAUTH_SECRET=changeme
+   NEXTAUTH_URL=http://54.175.209.93:3000
+   DATABASE_URL=postgresql://usuario:password@localhost:5432/mac_impostor
+   EOF
+
+   cp .env.example .env.local
+   nano .env.local   # edita valores reales
+   ```
+
+3. **Levantar contenedores**:
+   ```bash
+   docker compose up --build -d
+   ```
+   - App expuesta en `http://<IP_VM>:3000`.
+   - Socket.io en `http://<IP_VM>:4000`.
+   Abre esos puertos en el Security Group o configúralos detrás de Nginx.
+
 
 ## 🎯 Características Implementadas
 
