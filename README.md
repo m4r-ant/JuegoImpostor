@@ -199,6 +199,78 @@ const channel = realtime.subscribe(`room-${roomId}`);
 channel.on('message', (data) => {});
 \`\`\`
 
+## 🧩 Reglas de negocio clave
+
+- **Impostores por grupo**: `impostores = max(1, floor((jugadores - 1) / 3) + 1)`. Ejemplos: 3-5 jugadores → 1 impostor; 6-8 → 2 impostores; 9-11 → 3 impostores; etc.
+- **Sectores del MAC**: cada partida elige un sector aleatorio (1, 2 o 3) y se selecciona una obra aleatoria de ese sector.
+- **Revelación de obra**: solo inocentes ven la imagen y el nombre por 5 segundos; impostores no reciben información visual.
+- **Rondas**: cada jugador tiene 1 turno de ~15 segundos para compartir una característica; el impostor improvisa.
+- **Votación**: todos votan simultáneamente; empate = nadie eliminado.
+
+## 🧭 Flujo detallado de partida
+
+1. **Lobby**
+   - Crear sala (`POST /api/rooms`) → responder código de 6 caracteres.
+   - Unirse con código (`POST /api/rooms/[code]/join`).
+   - Escuchar `player-joined` por WebSocket para actualizar el listado.
+2. **Inicio**
+   - El host pulsa “Iniciar”. Backend calcula impostores con la regla anterior y publica `game-started` con roles (solo al jugador) y sector.
+3. **Revelación**
+   - Backend envía `artwork-revealed` a inocentes con `{title?, imageUrl, sector, characteristics}` y a impostores solo `{sector}`.
+   - Frontend muestra un temporizador de 5s y luego oculta la imagen.
+4. **Rondas de descripción**
+   - Orden de turnos en servidor para evitar conflictos. Evento `round-started` con `currentPlayerId`.
+   - Cada turno dura 15s; el cliente envía `describe` o expira con `round-ended`.
+5. **Votación**
+   - Evento `voting-started`; UI muestra botones de jugadores vivos.
+   - Enviar `vote` al servidor; cuando todos votan o expira el timer (30s) se emite `voting-ended` con resultados.
+6. **Resultado / siguiente ronda**
+   - Si queda más de 1 impostor y hay suficientes jugadores, repetir pasos 3-5.
+   - Evento `game-ended` con ganador y resumen.
+
+## 🔌 Contratos de eventos (sugeridos)
+
+```jsonc
+// player-joined
+{ "roomId": "uuid", "players": Player[] }
+
+// game-started (enviado a cada socket con su rol)
+{ "roomId": "uuid", "role": "innocent" | "impostor", "sector": 1 | 2 | 3 }
+
+// artwork-revealed (a inocentes)
+{ "artworkId": "uuid", "title": "string?", "imageUrl": "string", "sector": 1, "characteristics": string[] }
+
+// round-started
+{ "turnPlayerId": "uuid", "turnEndsAt": "timestamp" }
+
+// voting-ended
+{ "votes": { "targetId": "uuid", "count": number }[], "eliminatedId": "uuid | null" }
+```
+
+## 🛠️ Pasos recomendados de desarrollo
+
+1. **Modelar tipos compartidos** en `lib/types.ts` para `Room`, `Player`, `GameState`, `Artwork`, `SocketEvents`.
+2. **Configurar base de datos** con los scripts SQL y cargar obras (especialmente sin título) en `public/artworks`.
+3. **Implementar endpoints REST** descritos en la sección de estructura (`rooms`, `games`, `vote`, etc.) con validación de roles.
+4. **Montar servidor WebSocket** (Socket.io en `/api/ws`) y enviar los eventos anteriores; bloquear acciones si la sala no está en estado válido.
+5. **Crear hooks de cliente** (`use-websocket`, `use-game`) que escuchen eventos y sincronicen el estado global (Zustand o Context).
+6. **Construir vistas**: entrada (crear/unirse), lobby, reveal con temporizador, ronda con mic/textarea, panel de votación, pantalla final.
+7. **Pruebas locales**: abrir 3 pestañas en modo incógnito, crear sala y simular flujo completo verificando timers y reconexión.
+
+## 🧪 Escenarios críticos a validar
+
+- Recalcular impostores si alguien abandona antes de iniciar; si ocurre durante la partida, mantener el rol pero excluir de votación.
+- Si un jugador se desconecta durante su turno, saltar al siguiente tras 5s de gracia.
+- Evitar dobles votos y envíos fuera de tiempo (validar en servidor con estado y timestamps).
+- Confirmar que impostores nunca reciben `artwork-revealed` completo ni caché del navegador (usar `no-store`).
+
+## 🚀 Despliegue
+
+- **Backend**: Vercel / Railway para Next.js + Socket.io (activar `edge: false` en handler WS).
+- **Base de datos**: Neon / Supabase con SSL habilitado.
+- **Env vars**: `DATABASE_URL`, `NEXT_PUBLIC_SOCKET_URL`, `NEXT_PUBLIC_WS_PATH`, `NEXT_PUBLIC_ROOM_CODE_LENGTH`.
+- **CDN de imágenes**: subir obras a storage (Vercel Blob / Supabase Storage) y usar URLs absolutas.
+
 ### Flujo de Eventos en Tiempo Real
 
 \`\`\`
